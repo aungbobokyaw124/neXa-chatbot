@@ -1,114 +1,228 @@
-# neXa AI
+# neXa AI — Architecture
 
-**Build Faster. Create Smarter.**
+## Overview
 
-A premium, mobile-first AI chat application powered by Google Gemini, built on Cloudflare Workers.
-
----
-
-## Features
-
-- Clean, responsive dark-mode UI (mobile-first)
-- Powered by Google Gemini 1.5 Flash
-- Secure API key handling via Cloudflare secrets
-- Full local chat history (localStorage)
-- Markdown rendering with code blocks
-- Search across all conversations
-- Light / dark theme toggle
-- Zero dependencies on the frontend — pure HTML, CSS, ES Modules
-- Deployable on Cloudflare Pages + Workers
-
----
-
-## Project structure
+neXa AI is a single-page AI chat application. The architecture is intentionally simple and maintainable.
 
 ```
-neXa-ai/
-│
-├── frontend/               ← Static frontend (deploy to Pages)
-│   ├── index.html
-│   ├── assets/
-│   │   └── logo.svg
-│   ├── css/
-│   │   ├── reset.css
-│   │   ├── theme.css
-│   │   └── app.css
-│   └── js/
-│       ├── app.js          ← Main orchestrator
-│       ├── chat.js         ← API communication
-│       ├── storage.js      ← localStorage management
-│       └── ui.js           ← Rendering + markdown
-│
-├── worker/                 ← Cloudflare Worker backend
-│   ├── src/
-│   │   └── index.js        ← Worker entry point
-│   ├── package.json
-│   └── wrangler.jsonc      ← Wrangler configuration
-│
-├── docs/
-│   └── ARCHITECTURE.md     ← Full technical documentation
-│
-├── .gitignore
-├── README.md
-└── LICENSE
+Browser (Frontend)
+       │
+       │  POST /api/chat
+       ▼
+Cloudflare Worker (Backend)
+       │
+       │  HTTPS + API Key (secret)
+       ▼
+Google Gemini API
 ```
 
 ---
 
-## Quick start
+## Frontend
 
-### Prerequisites
+**Location:** `frontend/`
 
-- Node.js 18+
-- A [Cloudflare account](https://dash.cloudflare.com/sign-up) (free)
-- A [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier available)
+| File | Purpose |
+|------|---------|
+| `index.html` | App shell — preloader, sidebar, chat, modals |
+| `css/reset.css` | Minimal CSS reset |
+| `css/theme.css` | CSS custom properties (design tokens) |
+| `css/app.css` | All component styles |
+| `js/app.js` | Main orchestrator — state, events, routing |
+| `js/chat.js` | Worker API calls + validation |
+| `js/storage.js` | localStorage CRUD for conversations + settings |
+| `js/ui.js` | DOM rendering, markdown parser, toasts |
+| `assets/logo.svg` | neXa wordmark |
+
+### State management
+
+All state lives in:
+- **`localStorage`** — conversation history, settings
+- **In-memory JS object** — current session state (`currentConvId`, `isLoading`)
+
+No framework. No build step. Pure ES Modules loaded by the browser.
+
+### Markdown rendering
+
+A custom XSS-safe parser in `ui.js → parseMarkdown()`:
+
+1. Extracts code blocks → stash tokens (prevents double-parsing)
+2. Extracts inline code → stash
+3. Extracts links → stash (preserves URL integrity before escaping)
+4. Escapes remaining HTML characters
+5. Applies heading, bold, italic, list transforms
+6. Wraps paragraphs
+7. Restores stashed HTML fragments
+
+### Security (frontend)
+
+- No API key in any frontend file
+- `textContent` used for user-controlled content
+- `innerHTML` only used for sanitized markdown output
+- `escapeHTML()` applied before any injection
 
 ---
 
-### 1. Clone the repository
+## Backend (Cloudflare Worker)
 
-```bash
-git clone https://github.com/yourusername/neXa-ai.git
-cd neXa-ai
-```
+**Location:** `worker/`
 
----
+### Endpoints
 
-### 2. Install Wrangler
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/chat` | Send messages, receive AI reply |
+| `GET`  | `/health` | Health check |
+| `OPTIONS` | `*` | CORS preflight |
 
-```bash
-npm install -g wrangler
-wrangler login
-```
+### Request format
 
----
-
-### 3. Add your Gemini API key as a secret
-
-> **Never** put your API key in any file. Use Wrangler secrets.
-
-```bash
-cd worker
-npm install
-wrangler secret put GEMINI_API_KEY
-```
-
-When prompted, paste your Gemini API key. It is stored securely in Cloudflare and never in your code or repository.
-
----
-
-### 4. Configure allowed origins (production)
-
-Open `worker/wrangler.jsonc` and set `ALLOWED_ORIGINS` to your frontend domain:
-
-```jsonc
-"vars": {
-  "ALLOWED_ORIGINS": "https://your-nexa-app.pages.dev",
-  "ENVIRONMENT": "production"
+```json
+{
+  "messages": [
+    { "role": "user",      "content": "Hello" },
+    { "role": "assistant", "content": "Hi! How can I help?" },
+    { "role": "user",      "content": "Tell me about JavaScript" }
+  ]
 }
 ```
 
-Leave `ALLOWED_ORIGINS` empty during local development.
+### Response format
+
+**Success:**
+```json
+{ "success": true, "message": "JavaScript is..." }
+```
+
+**Error:**
+```json
+{ "success": false, "error": "Unable to contact AI service." }
+```
+
+### Validation (server-side)
+
+- `messages` must be a non-empty array
+- Max 50 messages per request
+- Each message: valid `role` (`user` | `assistant`), non-empty string `content`
+- Max 8,000 characters per message content
+- Last message must be from `user`
+
+### CORS
+
+Configured via `ALLOWED_ORIGINS` env var:
+- **Unset** → allow all origins (development mode)
+- **Set** → only allow listed origins (production mode)
+
+### Secrets
+
+| Name | How to set | Description |
+|------|-----------|-------------|
+| `GEMINI_API_KEY` | `wrangler secret put GEMINI_API_KEY` | Google Gemini API key |
+
+### Optional env vars
+
+| Name | Description |
+|------|-------------|
+| `ALLOWED_ORIGINS` | Comma-separated allowed origins |
+| `AI_GATEWAY_URL` | Cloudflare AI Gateway base URL |
+| `ENVIRONMENT` | `development` or `production` |
+
+---
+
+## Data flow
+
+```
+1. User types message → composer
+2. app.js validates input (client-side, UX only)
+3. Saves user message to localStorage
+4. POST /api/chat with full conversation history
+5. Worker validates request
+6. Worker calls Gemini REST API
+7. Worker returns { success, message }
+8. Frontend renders assistant reply (with markdown)
+9. Saves assistant reply to localStorage
+10. User can continue chatting
+```
+
+---
+
+## Deployment
+
+### Option A — Cloudflare Pages + Worker (recommended)
+
+The frontend is served as a Cloudflare Pages site. The Worker is deployed separately and proxied via Pages Functions or a custom route.
+
+1. Push `frontend/` to GitHub
+2. Connect repo to Cloudflare Pages
+3. Deploy Worker: `cd worker && npm run deploy`
+4. Configure `/api/*` route in Pages to proxy to Worker
+5. Set `ALLOWED_ORIGINS` to your Pages domain
+
+### Option B — Worker serves static files
+
+The Worker can serve frontend files directly from Workers Static Assets (KV-based). Not covered in this config but supported.
+
+### Option C — Separate hosting
+
+Frontend hosted on any static host (Netlify, Vercel, GitHub Pages).
+Worker deployed independently.
+Update `API_URL` constant in `frontend/js/chat.js` to your Worker URL.
+Set `ALLOWED_ORIGINS` to your frontend domain.
+
+---
+
+## Local development
+
+```bash
+# Install Wrangler
+npm install -g wrangler
+
+# Set your Gemini API key (stored securely by Wrangler)
+cd worker
+wrangler secret put GEMINI_API_KEY
+
+# Run Worker locally (port 8787)
+npm run dev
+
+# Serve frontend (use any static server, e.g.:)
+cd ../frontend
+npx serve .
+
+# Update API_URL in frontend/js/chat.js to:
+# const API_URL = 'http://localhost:8787/api/chat';
+```
+
+---
+
+## AI Gateway (optional)
+
+Cloudflare AI Gateway provides:
+- Request logging
+- Caching
+- Rate limiting
+- Cost monitoring
+
+To enable:
+
+1. Create a Gateway in your Cloudflare dashboard
+2. Add to `worker/wrangler.jsonc` vars:
+   ```jsonc
+   "AI_GATEWAY_URL": "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_name}/google-ai-studio"
+   ```
+3. The Worker automatically switches to Gateway mode when this var is present
+
+---
+
+## Security checklist
+
+- [x] API key stored as Cloudflare secret (never in code)
+- [x] API key never sent to frontend
+- [x] Server-side input validation
+- [x] HTML escaped before rendering
+- [x] CORS restricted to known origins in production
+- [x] No secrets in `.gitignore`-excluded files committed
+- [x] Error messages sanitized (no stack traces exposed)
+- [x] Safety filters enabled on Gemini API
 
 ---
 
