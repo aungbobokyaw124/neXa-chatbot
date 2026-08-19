@@ -1,12 +1,15 @@
 {
-  "name": "nexa-ai-worker",
+  "name": "nexa-worker",
+  "version": "1.0.0",
+  "description": "neXa AI — Cloudflare Worker backend",
+  "main": "src/index.js",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "dev":    "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "tail":   "wrangler tail"
   },
   "devDependencies": {
-    "wrangler": "latest"
+    "wrangler": "^3.0.0"
   }
 }
