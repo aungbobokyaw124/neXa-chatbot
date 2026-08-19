@@ -1,0 +1,12 @@
+:root {
+  --nexa-bg: #0B1F3A;
+  --nexa-accent: #10B981;
+  --nexa-text: #FFFFFF;
+  --nexa-muted: #9CAFC5;
+  --nexa-border: rgba(255,255,255,.10);
+  --nexa-surface: rgba(255,255,255,.045);
+  --nexa-radius: 16px;
+}
+
+html { color-scheme: dark; }
+body { background: var(--nexa-bg); color: var(--nexa-text); }
