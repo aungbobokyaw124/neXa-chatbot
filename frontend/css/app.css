@@ -1,0 +1,32 @@
+body { min-height: 100vh; }
+
+.app-shell { min-height: 100vh; }
+
+#preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-content: center;
+  gap: .45rem;
+  text-align: center;
+  background: var(--nexa-bg);
+}
+
+.preloader-brand { font-size: 3rem; font-weight: 800; letter-spacing: -.05em; }
+.preloader-subtitle { color: var(--nexa-muted); }
+.loader {
+  width: 24px;
+  height: 24px;
+  margin: .8rem auto 0;
+  border: 2px solid rgba(255,255,255,.15);
+  border-top-color: var(--nexa-accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .loader { animation: none; }
+}
