@@ -1,44 +1,11 @@
-/**
- * neXa AI — Wrangler Configuration
- *
- * SETUP STEPS:
- * 1. Replace "nexa-worker" with your preferred Worker name
- * 2. Run:  npx wrangler secret put GEMINI_API_KEY
- *          (paste your Gemini API key when prompted — never put it here)
- * 3. Optional: set ALLOWED_ORIGINS to your frontend domain
- * 4. Run:  npm run deploy
- *
- * DOCS: https://developers.cloudflare.com/workers/wrangler/configuration/
- */
 {
-  // Worker name — shows up in Cloudflare dashboard
   "name": "nexa-worker",
-
-  // Entry point
   "main": "src/index.js",
-
-  // Must match a supported compatibility date
-  // See: https://developers.cloudflare.com/workers/platform/compatibility-dates/
-  "compatibility_date": "2024-09-23",
-
-  // Enable ES module syntax
+  "compatibility_date": "2026-08-20",
   "compatibility_flags": ["nodejs_compat"],
-
-  // Non-secret environment variables
-  // DO NOT put GEMINI_API_KEY here — use `wrangler secret put`
   "vars": {
-    // Set to your production frontend URL when ready.
-    // Leave empty ("") or remove to allow all origins during development.
-    "ALLOWED_ORIGINS": "",
-
-    // Set to "production" when deploying live.
-    "ENVIRONMENT": "development"
-
-    // To enable Cloudflare AI Gateway, add:
-    // "AI_GATEWAY_URL": "https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_name}/google-ai-studio"
+    "ALLOWED_ORIGINS": ""
   },
-
-  // Observability (optional — enables Worker logs in dashboard)
   "observability": {
     "enabled": true
   }
